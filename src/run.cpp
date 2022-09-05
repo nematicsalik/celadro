@@ -27,6 +27,9 @@ void Model::Pre()
   // we make the system relax (without activity)
   if(relax_time>0)
   {
+    vector<double> save_zetaT(nphases, 0);
+    swap(zetaT, save_zetaT);
+
     double save_alpha  = 0; swap(alpha,  save_alpha);
     double save_zetaS  = 0; swap(zetaS,  save_zetaS);
     double save_zetaQ  = 0; swap(zetaQ,  save_zetaQ);
@@ -45,6 +48,7 @@ void Model::Pre()
 
     if(relax_nsubsteps) swap(nsubsteps, relax_nsubsteps);
 
+    swap(zetaT, save_zetaT);
     swap(alpha, save_alpha);
     swap(zetaS, save_zetaS);
     swap(zetaQ, save_zetaQ);
@@ -128,6 +132,8 @@ void Model::UpdateSumsAtNode(unsigned n, unsigned q)
   sumS01[k]  += p*S01[n];
   sumQ00[k]  += p*Q00[n];
   sumQ01[k]  += p*Q01[n];
+  sumS00zetaT[k]  += p*S00[n]*zetaT[n];
+  sumS01zetaT[k]  += p*S01[n]*zetaT[n];
   P0[k]      += p*polarization[n][0];
   P1[k]      += p*polarization[n][1];
   U0[k]      += p*velocity[n][0];
@@ -139,7 +145,9 @@ void Model::UpdatePotAtNode(unsigned n, unsigned q)
   const auto  k  = GetIndexFromPatch(n, q);
   const auto& s  = neighbors[k];
   const auto& sq = neighbors_patch[q];
-
+  auto supress = [](double x,double eps){
+      return x/sqrt(1 + eps*x*x);
+  };
   const auto p  = phi[n][q];
   const auto a  = area[n];
   const auto ll = laplacian(phi[n], sq);
@@ -156,11 +164,13 @@ void Model::UpdatePotAtNode(unsigned n, unsigned q)
       // repulsion term
       + 2*kappa/lambda*p*(square[k]-p*p)
       // adhesion term
-      - 2*omega*lambda*(ls-ll)
+     // - 2*omega*lambda*(ls-ll)
+      - 2*omega*lambda*supress(ls-ll,1.0)
       // repulsion with walls
       + 2*wall_kappa/lambda*p*walls[k]*walls[k]
       // adhesion with walls
-      - 2*wall_omega*lambda*walls_laplace[k]
+     // - 2*wall_omega*lambda*walls_laplace[k]
+      - 2.0*wall_omega*lambda*supress(walls_laplace[k],1.0)
     );
 
   // delta F / delta phi_i
@@ -176,19 +186,18 @@ void Model::UpdateForcesAtNode(unsigned n, unsigned q)
   const auto& s  = neighbors[k];
   const auto& sq = neighbors_patch[q];
 
-  const auto p   = phi[n][q];
   const auto dx  = derivX(phi[n], sq);
   const auto dy  = derivY(phi[n], sq);
   const auto dxs = derivX(sum, s);
   const auto dys = derivY(sum, s);
 
-  stress_xx[k] = - pressure[k] - zetaS*sumS00[k] - zetaQ*sumQ00[k];
+  stress_xx[k] = - pressure[k] - zetaS*sumS00[k] - zetaQ*sumQ00[k] ;
   stress_yy[k] = - pressure[k] + zetaS*sumS00[k] + zetaQ*sumQ00[k];
   stress_xy[k] = - zetaS*sumS01[k] - zetaQ*sumQ01[k];
 
   Fpressure[n] += { pressure[k]*dx, pressure[k]*dy };
-  Fshape[n]    += { zetaS*sumS00[k]*dx + zetaS*sumS01[k]*dy,
-                    zetaS*sumS01[k]*dx - zetaS*sumS00[k]*dy };
+  Fshape[n]    += { zetaS*sumS00[k]*dx + zetaS*sumS01[k]*dy - sumS01zetaT[k]*dx + sumS00zetaT[k]*dy,
+                    zetaS*sumS01[k]*dx - zetaS*sumS00[k]*dy + sumS00zetaT[k]*dx + sumS01zetaT[k]*dy };
   Fnem[n]      += { zetaQ*sumQ00[k]*dx + zetaQ*sumQ01[k]*dy,
                     zetaQ*sumQ01[k]*dx - zetaQ*sumQ00[k]*dy };
 
@@ -197,8 +206,8 @@ void Model::UpdateForcesAtNode(unsigned n, unsigned q)
   phi_dy[n][q] = dy;
 
   // nematic torques
-  tau[n]       += p*(Q00[n]*sumQ01[k] - Q01[n]*sumQ00[k]);
-  vorticity[n] += dx*U1[k] - dy*U0[k];
+  tau[n]       += sumQ00[k]*Q01[n] - sumQ01[k]*Q00[n];
+  vorticity[n] += U0[k]*dy - U1[k]*dx;
 
   // polarisation torques (not super nice)
   const double ovlap = -(dx*(dxs-dx)+dy*(dys-dy));
@@ -278,9 +287,9 @@ void Model::UpdateNematic(unsigned n, bool store)
   }
   const auto strength = pow(F01*F01 + F00*F00, 0.25);
 
-  theta_nem[n] = theta_nem_old[n] + time_step*(
+  theta_nem[n] = theta_nem_old[n] - time_step*(
       + Knem*tau[n]
-      - Jnem*strength*atan2(F00*Q01[n]-F01*Q00[n], F00*Q00[n]+F01*Q01[n]))
+      + Jnem*strength*atan2(F00*Q01[n]-F01*Q00[n], F00*Q00[n]+F01*Q01[n]))
       + Wnem*vorticity[n];
   Q00[n] = Snem*cos(2*theta_nem[n]);
   Q01[n] = Snem*sin(2*theta_nem[n]);
@@ -357,6 +366,8 @@ void Model::ReinitSumsAtNode(unsigned k)
   sumS01[k] = 0;
   sumQ00[k] = 0;
   sumQ01[k] = 0;
+  sumS00zetaT[k] = 0;
+  sumS01zetaT[k] = 0;
   pressure[k] = 0;
   U0[k] = 0;
   U1[k] = 0;

@@ -129,6 +129,8 @@ void Model::ParseProgramOptions(int ac, char **av)
      "Activity from internal nematic tensor")
     ("zetaS", opt::value<double>(&zetaS),
      "Activity from shape")
+    ("zetaT", opt::value<vector<double>>(&zetaT),
+     "Chiral activity")
     ("omega", opt::value<double>(&omega),
       "Adhesion parameter")
     ("wall-thickness", opt::value<double>(&wall_thickness),
@@ -149,6 +151,8 @@ void Model::ParseProgramOptions(int ac, char **av)
   init.add_options()
     ("config", opt::value<string>(&init_config),
       "Initial configuration")
+    ("length_cluster", opt::value<double>(&length_cluster)->default_value(10.0),
+      "Initial cluster radius (for config=cluster).")
     ("relax-time", opt::value<unsigned>(&relax_time)->default_value(0u),
       "Relaxation time steps at initialization.")
     ("noise", opt::value<double>(&noise),
@@ -205,15 +209,7 @@ void Model::ParseProgramOptions(int ac, char **av)
   else
   {
     std::fstream file(inputname.c_str(), std::fstream::in);
-    // try to read one char out of file to check that it exists
-    file.get();
-    if(!file.good()) {
-      throw error_msg("can not open runcard file '", inputname, "' or file is empty.");
-    }
-    // rewind file
-    file.clear();
-    file.seekg(0);
-    // parse options
+    if(!file.good()) throw error_msg("can not open runcard file ", inputname);
     opt::store(opt::parse_config_file(file, config_file_options), vm);
     opt::notify(vm);
   }

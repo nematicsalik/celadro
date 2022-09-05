@@ -50,6 +50,8 @@ void Model::Initialize()
   sumS01.resize(N, 0.);
   sumQ00.resize(N, 0.);
   sumQ01.resize(N, 0.);
+  sumS00zetaT.resize(N, 0.);
+  sumS01zetaT.resize(N, 0.);
   square.resize(N, 0.);
   thirdp.resize(N, 0.);
   fourthp.resize(N, 0.);
@@ -61,6 +63,9 @@ void Model::Initialize()
   // allocate memory for individual cells
   SetCellNumber(nphases);
 
+  // extend the parameters with the last given value
+  if(zetaT.empty()) zetaT.push_back(0.);
+  zetaT.resize(nphases, zetaT.back());
   // ---------------------------------------------------------------------------
 
   if(zetaQ!=0.) sign_zetaQ = zetaQ>0. ? 1 : -1;
@@ -165,4 +170,9 @@ void Model::InitializeNeighbors()
       }
     }
   }
+}
+
+void Model::SwapCells(unsigned n, unsigned m)
+{
+  swap(zetaT[n], zetaT[m]);
 }

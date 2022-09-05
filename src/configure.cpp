@@ -238,14 +238,51 @@ void Model::Configure()
   // cluster of close cells in the center
   else if(init_config=="cluster")
   {
-    const double theta  = 2*Pi/nphases;
+    // list of all centers
+    vector<coord> centers;
 
+    double area = Pi*pow(length_cluster/2., 2.);
+    // target radius for the cell-cell spacing in a cluster
+    radius = sqrt(double(area/nphases)/Pi);
+    cout << '\n' << radius << '\n';
     for(unsigned n=0; n<nphases; ++n)
     {
-      const double radius = R + nphases - 2;
-      AddCell(n, {unsigned(Size[0]/2+radius*(cos(n*theta)+noise*random_real())),
-                  unsigned(Size[1]/2+radius*(sin(n*theta)+noise*random_real())) });
+        while(true)
+        {
+           coord center = {
+            static_cast<unsigned>(birth_bdries[0]
+              +random_real()*(birth_bdries[1]-birth_bdries[0])),
+            static_cast<unsigned>(birth_bdries[2]
+              +random_real()*(birth_bdries[3]-birth_bdries[2]))
+            };
+
+            if(pow(wrap(diff(center[0], Size[0]/2), Size[0]), 2) +
+              pow(wrap(diff(center[1], Size[1]/2), Size[1]), 2) > pow(length_cluster/2. - R, 2)) continue;
+
+           // avoid overlaps between cells
+           bool is_overlapping = false;
+           for(const auto& c : centers)
+           {
+                if(pow(wrap(diff(center[0], c[0]), Size[0]), 2)
+                    + pow(wrap(diff(center[1], c[1]), Size[1]), 2) < 0.9*radius*radius)
+                {
+                    is_overlapping = true;
+
+                    break;
+                }
+            }
+
+
+            if(!is_overlapping)
+            {
+                centers.emplace_back(center);
+
+                break;
+            }
+        }
+        AddCell(n, centers.back());
     }
+
   }
   // ===========================================================================
   // single cell in the middle

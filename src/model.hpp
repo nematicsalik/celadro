@@ -64,7 +64,7 @@ struct Model
   /** Sum of phi at each node */
   field sum;
   /** Sum_i S_i phi_i */
-  field sumS00, sumS01;
+  field sumS00, sumS01, sumS00zetaT, sumS01zetaT;
   /** Sum_i Q_i phi_i */
   field sumQ00, sumQ01;
   /** Sum_i Area_i phi_i */
@@ -103,6 +103,8 @@ struct Model
   std::vector<double> vorticity;
   /** Alignement options (see options.cpp) */
   int align_nematic_to = 0, align_polarization_to = 1;
+  /** chiral activity (see options.cpp) */
+  std::vector<double> zetaT;
 
   /** @} */
 
@@ -182,6 +184,8 @@ struct Model
 
   /** size of the system */
   vec<unsigned, 2> Size;
+  /** diameter of the initial cluster (for config = cluster) **/
+  double length_cluster;
   /** total number of nodes */
   unsigned N;
   /** Total number of time steps */
@@ -562,12 +566,14 @@ struct Model
        & auto_name(lambda)
        & auto_name(nphases)
        & auto_name(init_config)
+       & auto_name(length_cluster)
        & auto_name(kappa)
        & auto_name(xi)
        & auto_name(R)
        & auto_name(alpha)
        & auto_name(zetaS)
        & auto_name(zetaQ)
+       & auto_name(zetaT)
        & auto_name(omega)
        & auto_name(wall_thickness)
        & auto_name(wall_kappa)
